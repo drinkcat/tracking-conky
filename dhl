@@ -1,0 +1,42 @@
+#!/bin/sh
+
+if [ -z "$1" ]; then
+    echo "Need tracking number as parameter." >&2
+    exit 1
+fi
+
+URL='http://www.dhl-usa.com/content/us/en/express/tracking.shtml?brand=DHL&AWB='"$1"
+
+TMP=`mktemp`
+
+trap "rm -f '$TMP'" INT HUP TERM 0
+
+wget -q "$URL" -O- > "$TMP"
+
+xsltproc --html - "$TMP" 2>/dev/null <<END
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+    <xsl:output method="text" encoding="utf-8" />
+    <xsl:template match="/">
+        <xsl:for-each select="//table[@summary='Summary of table content']/*[self::thead|self::tbody][not(@class)]">
+            <xsl:choose>
+                <xsl:when test="name(.) = 'thead'">
+                    <xsl:value-of select="tr/th[1]"/>
+                    <xsl:text>
+</xsl:text>
+                </xsl:when>
+                <xsl:otherwise>
+                    <xsl:if test="floor(tr/td[1]) = tr/td[1]">
+                        <xsl:value-of select="normalize-space(tr/td[4])"/>
+                        <xsl:text>: </xsl:text>
+                        <xsl:value-of select="normalize-space(tr/td[2])"/>
+                        <xsl:text>
+</xsl:text>
+                    </xsl:if>
+                </xsl:otherwise>
+            </xsl:choose>
+        </xsl:for-each>
+    </xsl:template>
+</xsl:stylesheet>
+END
+
